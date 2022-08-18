@@ -1,0 +1,69 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: random-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: random-app
+  template:
+    metadata:
+      labels:
+        app: random-app 
+    spec:
+      containers:
+      - name: mflog
+        image: mingrammer/flog
+        imagePullPolicy: IfNotPresent
+        args: ["-o", "/logs/random.log", "-t", "log", "-d", "1", "-l"]    
+        volumeMounts:
+        - mountPath: /logs
+          name: logs
+      - name: my-filebeat
+        #image: my-filebeat
+        image: docker.elastic.co/beats/filebeat:8.3.3
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /logs
+          name: logs
+        - name: filebeat-volume
+          mountPath: /usr/share/filebeat/filebeat.yml
+          subPath: filebeat.yml
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: filebeat-volume
+        configMap:
+          name: filebeat-configmap
+          items:
+          - key: filebeat.yml
+            path: filebeat.yml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-configmap
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+    - type: filestream
+      id: random-log
+      paths:
+        - /logs/random.log
+
+    output.redis:
+      hosts:
+      - redis-service
+
+    processors:
+    - add_fields:
+        target: fields
+        fields:
+          id: 1
+          name: "hello"
+    - dissect:
+        tokenizer: '%{request.ip|ip} - %{request.user} [%{request.date}] "%{request.method} %{request.url} HTTP/%{request.http_version}" %{request.code|integer} %{request.latency|integer}'
+        field: "message"
+        target_prefix: ""

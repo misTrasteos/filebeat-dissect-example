@@ -1,0 +1,9 @@
+apiVersion: skaffold/v2beta23
+kind: Config
+metadata:
+  name: filebeat-dissect-example
+
+deploy:
+  kubectl:
+    manifests:
+    - k8s/*.yaml
